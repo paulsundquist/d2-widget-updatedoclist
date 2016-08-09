@@ -1,0 +1,186 @@
+﻿<!doctype html>
+<!-- The DOCTYPE declaration above will set the    -->
+<!-- browser's rendering engine into               -->
+<!-- "Standards Mode". Replacing this declaration  -->
+<!-- with a "Quirks Mode" doctype may lead to some -->
+<!-- differences in layout.                        -->
+
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title></title>
+
+<!--                                           -->
+<!--         Open ajax hub                     -->
+<!--
+ * For final production, use OpenAjaxManagedHub-all-obf.js
+ * To make debugging easier, use OpenAjaxManagedHub-all.js during development.
+<script language='javascript' src="http://localhost:8080/D2/container/OpenAjaxManagedHub-all-obf.js"></script>
+-->
+<script language='javascript' src="http://localhost:8080/D2/container/external-api/OpenAjaxManagedHub-all.js"></script>
+<script language='javascript' src="http://localhost:8080/D2/container/external-api/D2-OAH.js"></script>
+
+
+<script type="text/javascript">
+	var d2OpenAjaxHub = new D2OpenAjaxHub();
+
+	///////////////////////////////
+	//
+	//	OPEN AJAX HUB CONNECTION
+	//
+	//////////////////////////////
+
+	/* Callback that is invoked upon successful connection to the Managed Hub
+	 */
+	function connectCompleted(hubClient, success, error) {
+		if (success) {
+
+			logit("Hub client connected");
+
+			// subscribe to events 
+			subscribeEvents();
+
+
+		} else
+			logit("Hub client NOT connected - please check console");
+	}
+
+	/* Callback that is invoked on widget activation -- Framework automatically subscribes to D2_EVENT_IFRAME_ACTIVE
+	 */
+	function onActiveWidget(bActiveFlag) {
+		logit("onWidgetActive: activate iframe widget, state=" + (bActiveFlag ? "active" : "inactive"));
+	}
+
+	/* Callback that is invoked on widget initialization -- Framework automatically subscribes to D2_EVENT_IFRAME_INIT
+	 */
+	function onInitWidget(message) {
+		logit("onWidgetInit: init iframe widget" );
+	}
+
+	/* Application initializes in response to document load event
+	 */
+	function loadEventHandler() {
+		logit("Widget/Open Ajax Iframe loaded");
+
+		//connecting hubclient 
+		d2OpenAjaxHub.connectHub(connectCompleted, onInitWidget, onActiveWidget);
+
+	}
+
+	///////////////////////////////
+	//
+	//	OPEN AJAX POST EVENT
+	//
+	//////////////////////////////
+
+	/**
+	This function updates the D2 doclist from an external widget.
+	This widget posts an event D2_ACTION_EXECUTE that allows easily calling a web service. 
+	The service used here (Search) is the one called when a query form is executed. 
+	This service receives property names and property values which will be used in the
+	    query form to replace the $values.
+	It updates the user's last search object by attaching the sent property values to it.
+			
+	When posting the D2_ACTION_EXECUTE event, it is possible to define what action or event
+	    will be triggered when the web service will be finished. 
+	In our case, this will trigger a D2_ACTION_SEARCH_DOCUMENT that will display the user's
+	    last search results in the doclist.
+	*/
+	function updateDoclist() {
+		
+		//Query form configuration name is defined below
+		var queryFormConfigName = "QF HR a_status";
+		
+		//To update the doclist a new OpenAjax message will be build to be posted in the Hub using the D2-OAH API
+		var messageToSend = new OpenAjaxMessage();
+		
+		// Specify a non-null ID (to pass request validation)
+		messageToSend.put("oam_id", "");
+
+		//In the message, we need to define what properties will be sent. Here a_status and r_object_type
+		messageToSend.put("list", "a_status¬r_object_type");
+		
+		//We set the a_status value
+		messageToSend.put("a_status", a_status.value); 
+		//We set the r_object_type value
+		messageToSend.put("r_object_type", r_object_type.value);
+		
+		//set the query form config name which will be used to update the doclist
+		messageToSend.put("config", queryFormConfigName);
+		
+		//Then we define what service and what method in the service will be called.
+		//We call the Search service and the runQueryFormSearch method.
+		//Calling this service will update the user's last search object
+		messageToSend.put("eService", "Search");
+		messageToSend.put("eMethod", "runQueryFormSearch");
+		
+		// When the service call completes, we can define an action to be executed. Here, an event will be posted.
+		messageToSend.put("rType", "EVENT");
+
+		// As the last search has been updated by the web service call, we will post
+		//    the D2_ACTION_SEARCH_DOCUMENT event to display the search results
+		messageToSend.put("rAction", "D2_ACTION_SEARCH_DOCUMENT::oam_id==node_last_search");
+
+		//The message is now ready, it can be posted in the Hub
+		d2OpenAjaxHub.sendMessage("D2_ACTION_EXECUTE", messageToSend);
+
+	}
+
+
+	///////////////////////////////
+	//
+	//	OPEN AJAX SUBSCRIBE EVENT
+	//
+	//////////////////////////////
+
+	/** Subscribe to events -- Subscribe to D2_EVENT_SELECT_OBJECT to get the selected object type and update out form (if checkbox is checked)
+	 *   
+	 */
+	function subscribeEvents() {
+		logit("subscribe to events...");
+		d2OpenAjaxHub.subscribeToChannel ("D2_EVENT_SELECT_OBJECT", selectObjectCallback, true);
+	}
+
+	/** Event Handler for "D2_EVENT_SELECT_OBJECT" -- Called when the event arrives.
+	 */
+	function selectObjectCallback(name, msg) {
+		logit("selectObjectCallback() called");
+		logit(" name: " + name);
+		logit(" msg.getId(): " + msg.getId());
+		logit(" msg.get(\"type\"): " + msg.get("type"));
+
+		// update object type in our form (if checked).
+		if (trackSelectedType.checked) {
+			r_object_type.value = msg.get("type");
+		}
+
+	}
+
+	/** console log wrapper */
+	function logit(s) {
+		console.log("[UpdateDocList Widget] " + s);
+	}
+
+
+</script>
+</head>
+<body onload="loadEventHandler();">
+	<div id="rootDiv" height="100%" width="100%">
+		<table>
+			<tr>
+				<td><label>Type : </label></td>
+				<td><input type="text" id="r_object_type" value="dm_document"></td>
+				<td><input type="checkbox" id="trackSelectedType" >
+				<label for="trackSelectedType">Track selected type</label></td>
+			</tr>
+			<tr>
+				<td><label>Status : </label></td>
+				<td><input type="text" id="a_status" value="Draft"></td>
+			</tr>
+			<tr>
+				<td></td>
+				<td><button onclick="updateDoclist()">Update Doclist</button></td>
+			</tr>
+	</div>
+</body>
+</html>

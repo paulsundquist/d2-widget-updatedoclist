@@ -1,0 +1,263 @@
+<!doctype html>
+<!-- The DOCTYPE declaration above will set the    -->
+<!-- browser's rendering engine into               -->
+<!-- "Standards Mode". Replacing this declaration  -->
+<!-- with a "Quirks Mode" doctype may lead to some -->
+<!-- differences in layout.                        -->
+
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title></title>
+
+<!--                                           -->
+<!--         Open ajax hub                     -->
+<!--                                           -->
+<script language='javascript' src="http://localhost:8080/D2/container/external-api/OpenAjaxManagedHub-all.js"></script>
+<script language='javascript' src="http://localhost:8080/D2/container/external-api/D2-OAH.js"></script>
+
+<script type="text/javascript">
+	var d2OpenAjaxHub = new D2OpenAjaxHub();
+	var messageToSend = new OpenAjaxMessage();
+	var eventList = new Array();
+
+	///////////////////////////////
+	//
+	//	OPEN AJAX HUB CONNECTION
+	//
+	//////////////////////////////
+
+	/* Callback that is invoked upon successful connection to the Managed Hub */
+	function connectCompleted(hubClient, success, error) {
+		if (success) {
+			this.addLog("Hub client connected");
+		} else
+			this.addLog("Hub client NOT connected - please check console");
+	}
+
+	/* Callback that is invoked widget init */
+	function widgetInit(oMessage) {
+
+		//this.onData("---init---", oMessage);
+
+		//getting events supported by the portal
+		this.eventList = oMessage.get("channels").split(oMessage.PARAM_SPLIT_SEPARATOR);
+		//init ui with this list
+		this.populateSelectEvents(document.getElementById("eventListSub"));
+		this.populateSelectEvents(document.getElementById("eventListSend"));
+		this.changeSelectParam();
+	}
+
+	/* Application initializes in response to document load event */
+	function loadEventHandler() {
+		console.log("Open Ajax Iframe loaded ");
+
+		//connecting hubclient 
+		d2OpenAjaxHub.connectHub(connectCompleted, widgetInit, onActiveWidget);
+
+		changeSelectParam();
+	}
+
+	///////////////////////////////
+	//
+	//	OPEN AJAX HUB SUBSCRIPTION
+	//
+	//////////////////////////////
+
+	/* Callback that is invoked upon data receiving*/
+	function onData(event, oMessage) {
+		addLog("-----------");
+
+		function addKeyValueToLog(key, value, hasNext) {
+			addLog("-> " + key + " = " + value);
+		}
+		oMessage.each(addKeyValueToLog);
+
+		addLog("received data for channel :" + event);
+	}
+
+	/* Callback that is invoked upon widget activation*/
+	function onActiveWidget(bActiveFlag) {
+		addLog("setting iframe widget " + this.getWidgetId() + " to " + (bActiveFlag ? "active" : "inactive"));
+	}
+
+	function subscribe() {
+		var index = document.getElementById("eventListSub").selectedIndex;
+		if (index != -1) {
+			var channel = this.eventList[index];
+			d2OpenAjaxHub.subscribeToChannel(channel, onData);
+			this.addLog("Subscribed to channel : " + channel);
+		}
+	}
+
+	function send() {
+		var index = document.getElementById("eventListSend").selectedIndex;
+		if (index != -1) {
+			var channel = this.eventList[index];
+			d2OpenAjaxHub.sendMessage(channel, messageToSend);
+			this.addLog("sent to channel : " + channel + "  - message : " + messageToSend.toString());
+		}
+	}
+
+	///////////////////////////////
+	//
+	//	UI
+	//
+	//////////////////////////////
+
+	function addLog(text) {
+		var consoleTextObject = document.getElementById("consoleText");
+		consoleTextObject.value = text + "\n" + consoleTextObject.value;
+	}
+
+	function populateSelectEvents(oSelect) {
+		var eventListOptions = this.eventList;
+		for ( var i = 0; i < eventListOptions.length; i++) {
+			var option = document.createElement("option");
+			option.text = eventListOptions[i];
+			oSelect.add(option, null);
+		}
+	}
+
+	function changeSelectParam() {
+		var mdiv = document.getElementById('selectParamKeyOther');
+		var cdiv = document.getElementById('selectParamKey');
+		if (cdiv.options[cdiv.selectedIndex].value == 'other') {
+			mdiv.style.visibility = 'visible';
+		} else {
+			mdiv.style.visibility = 'hidden';
+		}
+	}
+	
+	function setGlobal(oCheckbox) {
+		messageToSend.setGlobal(oCheckbox.checked);
+	}
+
+	function addParam() {
+		var key = "";
+		var mdiv = document.getElementById('selectParamKeyOther');
+		var cdiv = document.getElementById('selectParamKey');
+		if (cdiv.options[cdiv.selectedIndex].value == 'other') {
+			key = mdiv.value;
+		} else {
+			key = cdiv.value;
+		}
+
+		messageToSend.put(key, document.getElementById('inputParamValue').value);
+		displayMessage();
+	}
+	function clearMessage() {
+		this.messageToSend = new OpenAjaxMessage();
+		displayMessage();
+	}
+
+	function displayMessage() {
+		var paramsTextObject = document.getElementById("params");
+		paramsTextObject.value = "";
+
+		function addKeyValueToParam(key, value, hasNext) {
+			paramsTextObject.value = paramsTextObject.value + "\n" + key + " : " + value;
+		}
+		messageToSend.each(addKeyValueToParam);
+
+	}
+
+	function clearConsole() {
+		var consoleTextObject = document.getElementById("consoleText");
+		consoleTextObject.value = "";
+	}
+</script>
+</head>
+<body onload="loadEventHandler();">
+	<center>
+		<div height="100%">
+			<table height="100%" cellpadding="5">
+				<tr height="100%" valign="top">
+					<td height="100%">
+						<form action="" height="100%">
+							<fieldset>
+								<legend>
+									<b>Sending messages</b>
+								</legend>
+								<b>Send</b> a message to a channel : <br> Channel :<select
+									id="eventListSend"></select> <br>
+								<fieldset>
+									<legend>Add parameters</legend>
+									<table>
+										<tr align="left">
+											<td><label> Key : </label></td>
+											<td><select id="selectParamKey"
+												onChange="changeSelectParam()">
+													<option value="oam_id">Object id</option>
+													<option value="oam_value">Value</option>
+													<option value="other">Other</option>
+											</select> <INPUT id="selectParamKeyOther" type="text"></td>
+										</tr>
+										<tr>
+											<td><label> Value : </label></td>
+											<td><INPUT id="inputParamValue" type="text"><input
+												type="button" value="Add parameter to message"
+												onclick="addParam()" /></td>
+										</tr>
+
+									</table>
+
+								</fieldset>
+								<table width="100%">
+										<tr align="left">
+											<td><label> Global : </label><input type="checkbox" name="oam_global" value="oam_global" onchange="setGlobal(this)"/></td>
+										</tr>
+									</table>
+								<fieldset>
+									<legend>Message parameters</legend>
+									<textarea id="params" rows="4" cols="50" readonly="readonly"></textarea>
+									<br> <input type="button" value="Clear parameters"
+										onclick="clearMessage()" /> <input type="button"
+										value="Send message" onclick="send()" />
+								</fieldset>
+
+
+							</fieldset>
+						</form>
+					</td>
+					<td>
+						<table>
+							<tr height="100%" valign="top">
+								<td>
+									<form action="" height="100%">
+										<fieldset>
+											<legend>
+												<b>Receiving messages</b>
+											</legend>
+											<b>Subscribe</b> to a channel by selecting one in the list
+											and click on subscribe :<br> <select id="eventListSub"></select>
+											<input type="button" value="Subscribe to channel"
+												onclick="subscribe()" />
+										</fieldset>
+									</form>
+								</td>
+							</tr>
+							<tr height="100%" valign="top">
+								<td height="100%" valign="top">
+									<form action="">
+										<fieldset>
+											<legend>
+												<b>Console</b>
+											</legend>
+											<textarea id="consoleText" rows="10" cols="60"
+												readonly="readonly"></textarea>
+											<button onclick="clearConsole()">Clear console</button>
+										</fieldset>
+									</form>
+								</td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+			</table>
+			</tr>
+
+		</div>
+	</center>
+</body>
+</html>
